@@ -32,7 +32,7 @@ let isAnimatingPipeline = false;
 // ─── Build HTML ───
 app.innerHTML = `
   <header class="topbar">
-    <a class="brand" href="#" aria-label="Home">
+    <a class="brand" href="#" aria-label="Six-Phase-Compiler-Simulator">
       <span class="brand-mark">6</span>
       <span class="brand-name">Six-Phase-Compiler-Simulator<b>Simulation & Architecture Studio</b></span>
     </a>
