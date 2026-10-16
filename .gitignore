@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.tsupgrader/
+.tsupgrader/runtime-validation/node_modules/
