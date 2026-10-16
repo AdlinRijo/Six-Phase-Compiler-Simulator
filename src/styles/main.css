@@ -773,19 +773,67 @@ body::before {
 .ast-viewport { flex: 1; min-height: 0; overflow: auto; cursor: grab; background: #fafbfc; }
 .ast-viewport.panning { cursor: grabbing; user-select: none; }
 .ast-svg { display: block; }
-.ast-edge { fill: none; stroke: #cbd5e1; stroke-width: 1.5; transition: opacity 0.2s, stroke 0.2s; }
-.ast-edge.edge-visible { stroke: var(--accent); opacity: 1; }
-.ast-node { cursor: pointer; transition: opacity 0.15s; }
+.ast-edge {
+  fill: none;
+  stroke: #cbd5e1;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: stroke-dashoffset 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease, stroke 0.2s ease;
+}
+.ast-edge.edge-visible {
+  opacity: 1;
+  stroke-dashoffset: 0;
+  stroke: #cbd5e1;
+}
+.ast-edge.edge-drawing {
+  opacity: 1;
+  stroke-dashoffset: 0;
+  stroke: var(--accent);
+  stroke-width: 2.4;
+  filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+
+.ast-node {
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.88);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ast-node.node-visible {
+  opacity: 1;
+  transform: scale(1);
+}
 .ast-node rect {
   fill: #ffffff;
   stroke: #cbd5e1;
-  stroke-width: 1.2;
+  stroke-width: 1.4;
   rx: 8;
-  filter: drop-shadow(0 1px 2px rgba(15,23,42,0.05));
-  transition: fill 0.15s, stroke 0.15s;
+  filter: drop-shadow(0 1px 3px rgba(15,23,42,0.06));
+  transition: fill 0.15s, stroke 0.15s, stroke-width 0.15s, filter 0.15s;
 }
-.ast-node:hover rect, .ast-node:focus rect { fill: #f5f3ff; stroke: var(--accent); }
-.ast-node.selected rect { fill: #e0e7ff; stroke: var(--accent); stroke-width: 2; }
+.ast-node:hover rect, .ast-node:focus rect {
+  fill: #f5f3ff;
+  stroke: var(--accent);
+  stroke-width: 1.8;
+}
+.ast-node.selected rect {
+  fill: #e0e7ff;
+  stroke: var(--accent);
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 8px var(--accent-glow));
+}
+.ast-node.step-active rect {
+  stroke: var(--accent);
+  stroke-width: 2.2;
+  fill: #eef2ff;
+  filter: drop-shadow(0 0 10px rgba(79, 70, 229, 0.35));
+}
 .ast-node text { fill: var(--text); font: 600 10px var(--mono); pointer-events: none; }
 .ast-node .node-subtitle { fill: var(--text-muted); font-size: 8px; }
 .ast-node-inspector {

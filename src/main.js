@@ -432,13 +432,13 @@ function renderAST(result) {
   const svgEdges = edges.map(({ parent, child }) => {
     const p = nodeById.get(parent);
     const c = nodeById.get(child);
-    return `<path class="ast-edge" data-edge="${parent}-${child}" d="M ${x.get(parent)} ${p.depth * 82 + 34} C ${x.get(parent)} ${p.depth * 82 + 60}, ${x.get(child)} ${c.depth * 82 + 10}, ${x.get(child)} ${c.depth * 82 + 26}"/>`;
+    return `<path class="ast-edge edge-visible" data-edge="${parent}-${child}" data-parent="${parent}" data-child="${child}" pathLength="100" d="M ${x.get(parent)} ${p.depth * 82 + 34} C ${x.get(parent)} ${p.depth * 82 + 60}, ${x.get(child)} ${c.depth * 82 + 10}, ${x.get(child)} ${c.depth * 82 + 26}"/>`;
   }).join('');
   const svgNodes = nodes.map(({ id, node, depth }) => {
     const label = node.kind === 'Identifier' ? node.name : node.kind === 'Literal' ? String(node.value) : node.kind === 'BinaryExpression' ? node.operator : node.kind === 'UnaryExpression' ? `unary ${node.operator}` : node.kind;
     const subtitle = node.kind === 'Declaration' ? node.dataType : node.kind === 'BinaryExpression' ? 'expression' : node.kind === 'Identifier' ? 'identifier' : '';
     const lw = Math.min(148, Math.max(74, label.length * 7 + 26));
-    return `<g class="ast-node viz-step" data-node="${id}" data-start="${node.start}" data-end="${node.end}" style="opacity:1" tabindex="0" role="button" aria-label="${escapeHTML(node.kind)} ${escapeHTML(label)}"><rect x="${x.get(id) - lw / 2}" y="${depth * 82 + 18}" width="${lw}" height="42" rx="9"/><text x="${x.get(id)}" y="${depth * 82 + (subtitle ? 36 : 44)}" text-anchor="middle">${escapeHTML(label.length > 19 ? `${label.slice(0, 17)}…` : label)}</text>${subtitle ? `<text class="node-subtitle" x="${x.get(id)}" y="${depth * 82 + 51}" text-anchor="middle">${escapeHTML(subtitle)}</text>` : ''}</g>`;
+    return `<g class="ast-node node-visible viz-step" data-node="${id}" data-parent="${nodeById.get(id)?.parent?.id ?? ''}" data-start="${node.start}" data-end="${node.end}" tabindex="0" role="button" aria-label="${escapeHTML(node.kind)} ${escapeHTML(label)}"><rect x="${x.get(id) - lw / 2}" y="${depth * 82 + 18}" width="${lw}" height="42" rx="9"/><text x="${x.get(id)}" y="${depth * 82 + (subtitle ? 36 : 44)}" text-anchor="middle">${escapeHTML(label.length > 19 ? `${label.slice(0, 17)}…` : label)}</text>${subtitle ? `<text class="node-subtitle" x="${x.get(id)}" y="${depth * 82 + 51}" text-anchor="middle">${escapeHTML(subtitle)}</text>` : ''}</g>`;
   }).join('');
   return `<div class="ast-tree"><div class="ast-toolbar"><span><i class="ast-legend-node"></i> AST node <i class="ast-legend-edge"></i> Parent-child</span><div class="ast-controls"><button data-action="ast-zoom-out" title="Zoom out">−</button><button data-action="ast-zoom-reset" title="Reset">100%</button><button data-action="ast-zoom-in" title="Zoom in">＋</button></div></div><div class="ast-viewport" title="Drag to pan"><svg class="ast-svg" width="${width}" height="${height}" data-base-width="${width}" data-base-height="${height}" data-zoom="1" viewBox="0 0 ${width} ${height}" role="img" aria-label="Abstract syntax tree">${svgEdges}${svgNodes}</svg></div><div class="ast-node-inspector">Select a node to inspect its structure.</div></div>`;
 }
@@ -450,13 +450,77 @@ function collectSteps(result) {
     const panel = document.querySelector(`#body-${phase.id}`);
     if (!panel) continue;
     if (phase.id === 'parse') {
-      const nodes = [...panel.querySelectorAll('.ast-node')];
-      for (const element of nodes) {
-        const id = element.dataset.node;
-        const edgeEls = [...panel.querySelectorAll(`[data-edge$="-${id}"]`)];
-        steps.push(makeStep(phase.id, element,
-          () => { element.style.opacity = '1'; edgeEls.forEach((e) => e.classList.add('edge-visible')); },
-          () => { element.style.opacity = '0'; edgeEls.forEach((e) => e.classList.remove('edge-visible')); }));
+      const { nodes } = astNodes(result.ast);
+      if (nodes.length > 0) {
+        // Step 0: Root node (has no parent, appears first)
+        const rootRecord = nodes[0];
+        const rootEl = panel.querySelector(`[data-node="${rootRecord.id}"]`);
+        if (rootEl) {
+          steps.push(makeStep(phase.id, rootEl,
+            () => {
+              rootEl.classList.add('node-visible', 'step-active');
+              rootEl.style.opacity = '1';
+              rootEl.style.transform = 'scale(1)';
+            },
+            () => {
+              rootEl.classList.remove('node-visible', 'step-active');
+              rootEl.style.opacity = '0';
+              rootEl.style.transform = 'scale(0.88)';
+            }
+          ));
+        }
+
+        // Subsequent nodes: parent node is GUARANTEED to have already come in!
+        // Sequence for each child:
+        //   1. Branch Step: animates/grows down from parent (before node)
+        //   2. Child Node Step: reveals at the tip of the newly arrived branch
+        for (let i = 1; i < nodes.length; i++) {
+          const rec = nodes[i];
+          const parentId = rec.parent?.id;
+          if (!parentId) continue;
+
+          const edgeEl = panel.querySelector(`[data-edge="${parentId}-${rec.id}"]`);
+          const nodeEl = panel.querySelector(`[data-node="${rec.id}"]`);
+
+          // 1. Branch Step: draws out from its before node
+          if (edgeEl) {
+            steps.push(makeStep(phase.id, edgeEl,
+              () => {
+                edgeEl.classList.remove('edge-drawing');
+                void edgeEl.offsetWidth; // trigger reflow for smooth stroke-dashoffset transition
+                edgeEl.classList.add('edge-visible', 'edge-drawing');
+                edgeEl.style.opacity = '1';
+                edgeEl.style.strokeDashoffset = '0';
+              },
+              () => {
+                edgeEl.classList.remove('edge-visible', 'edge-drawing');
+                edgeEl.style.opacity = '0';
+                edgeEl.style.strokeDashoffset = '100';
+              }
+            ));
+          }
+
+          // 2. Child Node Step: arrives at the end of the branch
+          if (nodeEl) {
+            steps.push(makeStep(phase.id, nodeEl,
+              () => {
+                if (edgeEl) {
+                  edgeEl.classList.remove('edge-drawing');
+                  edgeEl.classList.add('edge-visible');
+                }
+                nodeEl.classList.add('node-visible', 'step-active');
+                nodeEl.style.opacity = '1';
+                nodeEl.style.transform = 'scale(1)';
+                nodeEl.scrollIntoView?.({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+              },
+              () => {
+                nodeEl.classList.remove('node-visible', 'step-active');
+                nodeEl.style.opacity = '0';
+                nodeEl.style.transform = 'scale(0.88)';
+              }
+            ));
+          }
+        }
       }
       continue;
     }
@@ -514,11 +578,14 @@ function animateNextPhase() {
   phaseSteps.forEach((s) => s.reset?.());
 
   // Animate each step with a delay
-  const delay = state.reducedMotion ? 20 : Math.max(100, 350 / state.speed);
+  const baseDelay = state.reducedMotion ? 20 : Math.max(100, 350 / state.speed);
+  const delay = phase.id === 'parse' ? Math.max(60, 200 / state.speed) : baseDelay;
 
   let stepIdx = 0;
   function animateStep() {
     if (stepIdx >= phaseSteps.length) {
+      // Clean up highlights
+      phaseSteps.forEach((s) => s.element?.classList.remove('step-active', 'edge-drawing'));
       // Phase done, move to next
       tabEl?.classList.remove('animating');
       animationPhaseIndex++;
@@ -527,9 +594,13 @@ function animateNextPhase() {
       return;
     }
 
+    if (stepIdx > 0) {
+      phaseSteps[stepIdx - 1]?.element?.classList.remove('step-active', 'edge-drawing');
+    }
+
     const step = phaseSteps[stepIdx];
     step.reveal?.();
-    if (step.element) {
+    if (step.element && phase.id !== 'parse') {
       step.element.style.opacity = '1';
       step.element.classList.add('step-active');
     }
